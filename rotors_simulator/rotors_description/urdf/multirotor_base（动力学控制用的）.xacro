@@ -1,0 +1,399 @@
+<?xml version="1.0"?>
+<!--
+  Copyright 2015 Fadri Furrer, ASL, ETH Zurich, Switzerland
+  Copyright 2015 Michael Burri, ASL, ETH Zurich, Switzerland
+  Copyright 2015 Mina Kamel, ASL, ETH Zurich, Switzerland
+  Copyright 2015 Janosch Nikolic, ASL, ETH Zurich, Switzerland
+  Copyright 2015 Markus Achtelik, ASL, ETH Zurich, Switzerland
+
+  Licensed under the Apache License, Version 2.0 (the "License");
+  you may not use this file except in compliance with the License.
+  You may obtain a copy of the License at
+
+  http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+-->
+
+<robot xmlns:xacro="http://ros.org/wiki/xacro">
+  <!-- Macro for the inertia of a box -->
+  <xacro:macro name="box_inertia" params="x y z mass">
+    <inertia ixx="${0.0833333 * mass * (y*y + z*z)}" ixy="0.0" ixz="0.0"
+      iyy="${0.0833333 * mass * (x*x + z*z)}" iyz="0.0"
+      izz="${0.0833333 * mass * (x*x + y*y)}" />
+  </xacro:macro>
+
+  <!-- Macro for the inertial properties of a box -->
+  <xacro:macro name="box_inertial" params="x y z mass *origin">
+    <inertial>
+      <mass value="${mass}" />
+      <xacro:insert_block name="origin" />
+      <xacro:box_inertia x="${x}" y="${y}" z="${z}" mass="${mass}" />
+    </inertial>
+  </xacro:macro>
+
+
+
+  <xacro:property name="PI" value="3.1415926535897932384626433832795028841971"/>
+
+
+  <!-- Main multirotor link -->
+  <xacro:macro name="multirotor_base_macro"
+    params="robot_namespace mass use_mesh_file mesh_file *inertia">
+
+    <link name="world"></link>
+
+
+    <joint name="glue" type="floating">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <parent link="world" />
+      <child link="${robot_namespace}/base_link" />
+    </joint>
+
+    <link name="${robot_namespace}/base_link">
+      <visual>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+  	  <box size="0.3 0.01 0.01"/>
+        </geometry>
+      </visual>
+
+      <visual>
+        <origin xyz="-0.15 0 0" rpy="${PI/2} 0 0"/>
+        <geometry>
+  	  <cylinder length="0.02" radius="0.01" />
+        </geometry>
+      </visual>
+
+
+      <collision>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+  	  <sphere radius="0.1"/>
+        </geometry>
+      </collision>
+
+      <visual>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+  	  <sphere radius="0.1"/>
+        </geometry>
+      </visual>
+
+
+      <inertial>
+        <mass value="${mass}" />  <!-- [kg] -->
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <inertia ixx="0.00001" ixy="0.0" ixz="0.0" iyy="0.00015" iyz="0.0" izz="0.00015" />
+      </inertial>
+
+    </link>
+    
+
+    <!-- attach multirotor_base_plugin to the base_link -->
+    <gazebo>
+      <plugin filename="librotors_gazebo_multirotor_base_plugin.so" name="multirotor_base_plugin">
+        <robotNamespace>${robot_namespace}</robotNamespace>
+        <linkName>${robot_namespace}/base_link</linkName>
+        <rotorVelocitySlowdownSim>${rotor_velocity_slowdown_sim}</rotorVelocitySlowdownSim>
+      </plugin>
+    </gazebo>
+  </xacro:macro>
+
+  <!-- Rotor joint and link -->
+  <xacro:macro name="vertical_rotor"
+    params="robot_namespace suffix direction motor_constant moment_constant parent mass_rotor radius_rotor time_constant_up time_constant_down max_rot_velocity motor_number rotor_drag_coefficient rolling_moment_coefficient color use_own_mesh mesh *origin *inertia">
+    <joint name="${robot_namespace}/rotor_${motor_number}_joint" type="continuous">
+      <xacro:insert_block name="origin" />
+      <axis xyz="0 0 1" />
+      <!-- TODO(ff): not currently set because it's not yet supported -->
+      <!-- <limit effort="2000" velocity="${max_rot_velocity}" /> -->
+      <parent link="${parent}" />
+      <child link="${robot_namespace}/rotor_${motor_number}" />
+    </joint>
+    <link name="${robot_namespace}/rotor_${motor_number}">
+      <inertial>
+        <mass value="${mass_rotor}" /> <!-- [kg] --> 
+        <xacro:insert_block name="inertia" />          
+<!-- can_jian : (firefly.xacro) <xacro:property name="rotor_inertia">  <xacro:insert_block name="rotor_inertia" /> -->
+      </inertial>
+      <visual>
+        <geometry>
+           <cylinder length="0.025" radius="${radius_rotor}"/>
+        </geometry>
+      </visual>
+    </link>
+
+
+
+    <gazebo>
+      <plugin name="${robot_namespace}_${suffix}_motor_model" filename="librotors_gazebo_motor_model.so">
+        <robotNamespace>${robot_namespace}</robotNamespace>
+        <jointName>${robot_namespace}/rotor_${motor_number}_joint</jointName>
+        <linkName>${robot_namespace}/rotor_${motor_number}</linkName>
+        <turningDirection>${direction}</turningDirection>
+        <timeConstantUp>${time_constant_up}</timeConstantUp>
+        <timeConstantDown>${time_constant_down}</timeConstantDown>
+        <maxRotVelocity>${max_rot_velocity}</maxRotVelocity>
+        <motorConstant>${motor_constant}</motorConstant>
+        <momentConstant>${moment_constant}</momentConstant>
+        <commandSubTopic>gazebo/command/motor_speed</commandSubTopic>
+        <motorNumber>${motor_number}</motorNumber>
+        <rotorDragCoefficient>${rotor_drag_coefficient}</rotorDragCoefficient>
+        <rollingMomentCoefficient>${rolling_moment_coefficient}</rollingMomentCoefficient>
+        <motorSpeedPubTopic>motor_speed/${motor_number}</motorSpeedPubTopic>
+        <rotorVelocitySlowdownSim>${rotor_velocity_slowdown_sim}</rotorVelocitySlowdownSim>
+      </plugin>
+    </gazebo>
+    <gazebo reference="${robot_namespace}/rotor_${motor_number}">
+      <material>Gazebo/${color}</material>
+    </gazebo>
+  </xacro:macro>
+
+
+
+  <joint name="J2" type="revolute">
+      <parent link="firefly/base_link"/>
+      <child link="L2"/>
+      <origin rpy="0 0 0" xyz="0.15 0 0"/>
+      <axis xyz="1 0 0"/>
+      <limit lower="${-PI/2}" upper="${PI/2}" effort="100000000" velocity="10000000"/>
+      <dynamics damping="0.001"/>
+      <dynamics friction="0.0"/>
+  </joint>
+
+
+
+
+  <link name="L2">
+    <visual>
+      <origin xyz="0 0 0" rpy="0 ${PI/2} 0"/>
+      <geometry>
+	<sphere radius="0.015" />
+      </geometry>
+    </visual>
+
+    <inertial>
+      <mass value="0.01" />
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <inertia ixx="1e-5" ixy="0" ixz="0" iyy="1e-5" iyz="0" izz="1e-5" />
+    </inertial>
+  </link>
+
+
+
+
+
+  <joint name="J1" type="revolute">
+      <parent link="L2"/>
+      <child link="L1"/>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <axis xyz="0 1 0"/>
+      <limit lower="${-PI/2}" upper="${PI/2}" effort="100000000" velocity="10000000"/>
+      <dynamics damping="0.001"/>
+      <dynamics friction="0.0"/>
+  </joint>
+
+  <link name="L1">
+    <visual>
+      <origin xyz="0 0 0" rpy="${PI/2} 0 0"/>
+      <geometry>
+	<cylinder length="0.1" radius="0.01" />
+      </geometry>
+    </visual>
+
+
+    <inertial>
+      <mass value="0.015" />
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <inertia ixx="1e-5" ixy="0" ixz="0" iyy="1e-5" iyz="0" izz="1e-5" />
+    </inertial>
+  </link>
+
+
+
+
+
+
+
+
+
+  <joint name="J3" type="revolute">
+      <parent link="firefly/base_link"/>
+      <child link="L3"/>
+      <origin rpy="0 0 0" xyz="-0.15 0 0"/>
+      <axis xyz="0 1 0"/>
+      <limit lower="0" upper="${PI/2}" effort="100000000" velocity="10000000"/>
+      <dynamics damping="0.001"/>
+      <dynamics friction="0.0"/>
+  </joint>
+
+  <link name="L3">
+    <visual>
+      <origin xyz="-0.15 0 0" rpy="0 0 0"/>
+      <geometry>
+	<box size="0.3 0.01 0.01"/>
+      </geometry>
+    </visual>
+
+
+      <collision>
+        <origin xyz="-0.15 0 0" rpy="0 0 0"/>
+        <geometry>
+  	  <box size="0.01 0.2 0.2"/>
+        </geometry>
+      </collision>
+
+
+    <inertial>
+      <mass value="0.2" />
+      <origin xyz="-0.2 0 0" rpy="0 0 0"/>
+      <inertia ixx="0.00001" ixy="0" ixz="0" iyy="0.00015" iyz="0" izz="0.00015" />
+    </inertial>
+  </link>
+
+
+
+
+
+
+  <joint name="J4" type="revolute">
+      <parent link="L3"/>
+      <child link="L4"/>
+      <origin rpy="0 0 0" xyz="-0.3 0 0"/>
+      <axis xyz="1 0 0"/>
+      <limit lower="${-PI/2}" upper="${PI/2}" effort="100000000" velocity="10000000"/>
+      <dynamics damping="0.001"/>
+      <dynamics friction="0.0"/>
+  </joint>
+
+  <link name="L4">
+    <visual>
+      <origin xyz="0 0 0" rpy="0 ${PI/2} 0"/>
+      <geometry>
+	<sphere radius="0.015" />
+      </geometry>
+    </visual>
+
+    <inertial>
+      <mass value="0.015" />
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <inertia ixx="1e-5" ixy="0" ixz="0" iyy="1e-5" iyz="0" izz="1e-5" />
+    </inertial>
+  </link>
+
+
+
+
+
+
+
+
+
+
+
+  <joint name="J5" type="revolute">
+      <parent link="L4"/>
+      <child link="L5"/>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <axis xyz="0 1 0"/>
+      <limit lower="${-PI/2}" upper="${PI/2}" effort="100000000" velocity="10000000"/>
+      <dynamics damping="0.001"/>
+      <dynamics friction="0.0"/>
+  </joint>
+
+  <link name="L5">
+    <visual>
+      <origin xyz="0 0 0" rpy="${PI/2} 0 0"/>
+      <geometry>
+	<cylinder length="0.1" radius="0.01" />
+      </geometry>
+    </visual>
+
+
+    <inertial>
+      <mass value="0.01" />
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <inertia ixx="1e-5" ixy="0" ixz="0" iyy="1e-5" iyz="0" izz="1e-5" />
+    </inertial>
+  </link>
+
+
+
+
+
+
+
+
+  <transmission name="trans">
+    <type>transmission_interface/SimpleTransmission</type>
+    <joint name="J1">
+      <hardwareInterface>hardware_interface/EffortJointInterface</hardwareInterface>
+    </joint>
+    <actuator name="motor">
+      <hardwareInterface>hardware_interface/EffortJointInterface</hardwareInterface>
+      <mechanicalReduction>1</mechanicalReduction>
+    </actuator>
+  </transmission>
+
+  <transmission name="trans">
+    <type>transmission_interface/SimpleTransmission</type>
+    <joint name="J2">
+      <hardwareInterface>hardware_interface/EffortJointInterface</hardwareInterface>
+    </joint>
+    <actuator name="motor">
+      <hardwareInterface>hardware_interface/EffortJointInterface</hardwareInterface>
+      <mechanicalReduction>1</mechanicalReduction>
+    </actuator>
+  </transmission>
+
+  <transmission name="trans">
+    <type>transmission_interface/SimpleTransmission</type>
+    <joint name="J3">
+      <hardwareInterface>hardware_interface/EffortJointInterface</hardwareInterface>
+    </joint>
+    <actuator name="motor">
+      <hardwareInterface>hardware_interface/EffortJointInterface</hardwareInterface>
+      <mechanicalReduction>1</mechanicalReduction>
+    </actuator>
+  </transmission>
+
+  <transmission name="trans">
+    <type>transmission_interface/SimpleTransmission</type>
+    <joint name="J4">
+      <hardwareInterface>hardware_interface/EffortJointInterface</hardwareInterface>
+    </joint>
+    <actuator name="motor">
+      <hardwareInterface>hardware_interface/EffortJointInterface</hardwareInterface>
+      <mechanicalReduction>1</mechanicalReduction>
+    </actuator>
+  </transmission>
+
+  <transmission name="trans">
+    <type>transmission_interface/SimpleTransmission</type>
+    <joint name="J5">
+      <hardwareInterface>hardware_interface/EffortJointInterface</hardwareInterface>
+    </joint>
+    <actuator name="motor">
+      <hardwareInterface>hardware_interface/EffortJointInterface</hardwareInterface>
+      <mechanicalReduction>1</mechanicalReduction>
+    </actuator>
+  </transmission>
+
+
+  <gazebo>
+     <plugin name="gazebo_ros_control" filename="libgazebo_ros_control.so">
+       <robotNamespace>/firefly/arm</robotNamespace>
+       <robotSimType>gazebo_ros_control/DefaultRobotHWSim</robotSimType>
+     </plugin>
+  </gazebo>
+
+
+
+
+
+</robot>

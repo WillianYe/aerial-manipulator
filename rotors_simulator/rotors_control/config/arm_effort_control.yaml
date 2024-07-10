@@ -1,0 +1,35 @@
+firefly/arm:
+  # Publish all joint states -----------------------------------
+  joint_state_controller:
+    type: joint_state_controller/JointStateController
+    publish_rate: 200 
+
+  # Effort Controllers ---------------------------------------
+  J1_effort_controller:
+    type: effort_controllers/JointEffortController 
+    joint: J1
+    pid: {p: 100, i: 0, d: 10}
+
+  J2_effort_controller:
+    type: effort_controllers/JointEffortController 
+    joint: J2
+    pid: {p: 100, i: 0, d: 10}
+
+  J3_effort_controller:
+    type: effort_controllers/JointEffortController 
+    joint: J3
+    pid: {p: 100, i: 0, d: 10}
+
+  J4_effort_controller:
+    type: effort_controllers/JointEffortController 
+    joint: J4
+    pid: {p: 100, i: 0, d: 10}
+
+  J5_effort_controller:
+    type: effort_controllers/JointEffortController 
+    joint: J5
+    pid: {p: 100, i: 0, d: 10}
+
+
+
+
